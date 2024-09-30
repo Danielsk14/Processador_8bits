@@ -1,0 +1,225 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.all;
+use ieee.numeric_std.all;
+use IEEE.STD_LOGIC_UNSIGNED.ALL;
+
+--memoria de instruçoes
+entity Processador is
+port(
+  clk, clr: in STD_LOGIC;
+  DEC: out std_logic_vector(6 downto 0) -- variavel que vai guardar o resultado dos display que serão acendidos.
+  
+);
+end Processador;
+architecture logic of Processador is
+
+
+  signal end_inst : STD_LOGIC_VECTOR (3 downto 0) := "0000"; -- saida do contador e entrada da memoria de instuçoes  
+  signal op : STD_LOGIC_VECTOR (3 downto 0); -- operaçao da mem instruçao
+  signal end_val : STD_LOGIC_VECTOR (3 downto 0); -- endereço saida da memoria de instruçao
+    
+  signal ula_op  : STD_LOGIC_VECTOR (3 downto 0);--código de operação que vai ser mandado pra ula
+  signal ula_end : STD_LOGIC_VECTOR (3 downto 0);--endereço em que o resultado vai ser salvo
+  
+  signal	A,B: std_logic_vector(3 downto 0); -- variáveis de entrada para as operações.
+  signal operacao: std_logic_vector(3 downto 0); -- sinal de entrada para saber qual será a operação para ser usada no multiplexador
+  signal D: std_logic_vector(3 downto 0); -- sinal usado para o multiplexador e usado para compração com o decodificador.
+  signal x: std_logic;  -- só usado para diferenciar as operações.
+  signal Y: boolean;  -- sinal usado para o multiplexador e comparação para o decodificador também
+ 
+  --memoria de instruçoes
+type Mem_Inst_Set is array (0 to 15) of STD_LOGIC_VECTOR (7 downto 0);
+  constant mem : Mem_Inst_Set := (
+  "11000101",
+  "00000010",
+  "00010100",
+  "00100101",
+  "00110001",
+  "10100100",
+  "01000110",
+  "01010010",
+  "01101010",
+  "01111011",
+  "10000110",
+  "10010101",
+  "10110000",
+  "11001010",
+  "11010110",
+  "00011001" );
+  
+  type array_mem is array(0 to 14) of STD_LOGIC_VECTOR(7 downto 0);--declarando o array de memoria 
+		signal un_mem : array_mem:= (--objeto que recebe o array 
+			"01100111",
+			"01010100",
+			"01100010",
+			"01110001",
+			"00010100",
+			"00000101",
+			"01010000",
+			"01100100",
+			"01000110",
+			"00100101",
+			"00110100",
+			"01100001",
+			"10100010",
+			"01100100",
+			"01000101"
+		);
+  
+begin 
+process (clk, clr)
+
+begin
+   --PARTE DO CONTADOR
+	
+   if (clr = '1') then
+	   end_inst <= "0000";
+   elsif (clk'event and clk = '1') then  
+	   end_inst <= end_inst + 1;
+   end if;
+   
+end process;
+	
+	--PARTE DA MEM´ORIA DE INSTRUÇAO
+	
+	--passa os valores do array para as saidas da mem_int
+  op <= mem (to_integer(unsigned(end_inst))) (7 downto 4); 
+  end_val <= mem (to_integer(unsigned(end_inst))) (3 downto 0);
+
+  
+   --PARTE DA UNIDADE DE CONTROLE
+process(op, end_val)
+begin
+	
+  	--RECEBE A INSTRUÇÃO DA MEMÓRIA, E GERA UMA SAIDA DE MESMO VALOR PARA A ULA
+     ula_op <= op;
+					 
+						 
+	-- RECEBE A INSTRUÇÃO DA MEMÓRIA E ENVIA O ENDEREÇO EM QUE O RESULTADO DEVE SER SALVO PARA A ULA					 
+     ula_end <= end_val;		
+
+		--CASO A OPERAÇÃO SEJA UM JUMP	
+  if op = "1010" then
+    ula_op <= mem (to_integer(unsigned(end_val))) (7 downto 4); 
+	 ula_end <= mem (to_integer(unsigned(end_val))) (3 downto 0); 
+  end if;
+  
+ end process;
+
+  --PARTE DA ULA
+    operacao <= op;
+  
+    process(A,B,operacao,ula_end,un_mem) -- processo do nosso case de multiplexador(operações).
+	 begin
+	 
+		
+		case(operacao) is
+		   when "0000" =>
+			   A <= un_mem (to_integer(unsigned(ula_end))) (7 downto 4); 
+	         B <= un_mem (to_integer(unsigned(ula_end))) (3 downto 0); 
+		   	D <= A+B; -- operação de soma
+				x <= '1';
+		   when "0001" =>
+			   A <= un_mem (to_integer(unsigned(ula_end))) (7 downto 4); 
+	         B <= un_mem (to_integer(unsigned(ula_end))) (3 downto 0); 
+		   	D <= A-B; -- operação de subtração
+				x <= '1';
+		   when "0010" => 
+			   A <= un_mem (to_integer(unsigned(ula_end))) (7 downto 4); 
+	         B <= un_mem (to_integer(unsigned(ula_end))) (3 downto 0); 
+			   D <= std_logic_vector(to_unsigned(to_integer(unsigned(A)) * to_integer(unsigned(B)), 4)); -- operação de mult.
+														--conversor de varios tipos
+														--to_integer(unsigned(X))
+														--std_logic_vector(to_unsigned(K, N))
+			   x <= '1';
+		   when "0011" =>
+			   A <= un_mem (to_integer(unsigned(ula_end))) (7 downto 4); 
+	         B <= un_mem (to_integer(unsigned(ula_end))) (3 downto 0); 
+		     	D <= std_logic_vector(to_unsigned(to_integer(unsigned(a)) / to_integer(unsigned(b)), 4)); -- operação de divis.
+				x <= '1';
+		   when "0110" =>
+			   A <= un_mem (to_integer(unsigned(ula_end))) (7 downto 4); 
+	         B <= un_mem (to_integer(unsigned(ula_end))) (3 downto 0); 
+		   	Y <= A = B; -- operação de igualdade.			 
+				x <= '0';
+		   when "0100" =>
+			   A <= un_mem (to_integer(unsigned(ula_end))) (7 downto 4); 
+	         B <= un_mem (to_integer(unsigned(ula_end))) (3 downto 0); 
+		    	Y <= A > B; -- operação de maior.
+				x <= '0';
+		   when "0101" => 
+			   A <= un_mem (to_integer(unsigned(ula_end))) (7 downto 4); 
+	         B <= un_mem (to_integer(unsigned(ula_end))) (3 downto 0); 
+			   Y <= A < B; -- operação de menor.
+				x <= '0';
+			when "0111" =>
+			   A <= un_mem (to_integer(unsigned(ula_end))) (7 downto 4); 
+	         B <= un_mem (to_integer(unsigned(ula_end))) (3 downto 0); 
+		    	Y <= A >= B; --maior ou igual
+				x <= '0';
+			when "1000" => 
+			   A <= un_mem (to_integer(unsigned(ula_end))) (7 downto 4); 
+	         B <= un_mem (to_integer(unsigned(ula_end))) (3 downto 0); 
+			   Y <= A <= B; --menor ou igual
+				x <= '0';
+			when "1001" =>
+			   A <= un_mem (to_integer(unsigned(ula_end))) (7 downto 4); 
+	         B <= un_mem (to_integer(unsigned(ula_end))) (3 downto 0); 
+		    	Y <= A /= B; -- diferente
+				x <= '0';
+			when "1011" => A <= B; -- MOV
+			when "1100" => --load
+			   A <= un_mem (to_integer(unsigned(ula_end))) (7 downto 4); 
+		      B <= un_mem (to_integer(unsigned(ula_end))) (3 downto 0);
+				Y <= true;
+				x <= '0';
+			when "1101" =>
+		    	un_mem(to_integer(unsigned(ula_end))) <= std_logic_vector(to_unsigned(to_integer(unsigned(A)), 8)); --store
+				Y <= true;
+				x <= '0';
+			
+		when others =>
+		   A <= un_mem (to_integer(unsigned(ula_end))) (7 downto 4); 
+	      B <= un_mem (to_integer(unsigned(ula_end))) (3 downto 0); 
+	     	D <= A+B; -- qualquer outro caso ele faz a soma.
+			x <= '1';
+		end case;
+	end process;
+	 
+		process(D,x)       -- processo referente ao case do decodificador.
+		begin 
+		if(x = '1') then
+			case(D) is      -- case do decodificador.
+				when "0000" => DEC <= "1000000"; --'0'
+				when "0001" => DEC <= "1111001"; --'1'
+				when "0010" => DEC <= "0100100"; --'2'
+				when "0011" => DEC <= "0110000"; --'3'
+				when "0100" => DEC <= "0011001"; --'4'
+				when "0101" => DEC <= "0010010"; --'5'
+				when "0110" => DEC <= "0000010"; --'6'
+				when "0111" => DEC <= "1111000"; --'7'
+				when "1000" => DEC <= "0000000"; --'8'
+				when "1001" => DEC <= "0010000"; --'9'
+				when "1010" => DEC <= "0001000"; --'A'
+				when "1011" => DEC <= "0000011"; --'B'
+				when "1100" => DEC <= "1000110"; --'C'
+				when "1101" => DEC <= "0100001"; --'D'
+				when "1110" => DEC <= "0000110"; --'E'
+				when "1111" => DEC <= "0001110"; --'F'
+				when others => DEC <= "1111111";
+				end case;
+				else 
+				case(Y) is 
+					when false =>  DEC <= "1000000"; --'0'
+					when true  =>  DEC <= "1111001"; --'1'
+					when others => DEC <= "1000000";
+					end case;
+				
+			end if;
+  
+  
+	
+end process;
+
+
+end logic;
